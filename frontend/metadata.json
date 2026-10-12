@@ -1,0 +1,6 @@
+{
+  "name": "EcoRoute — Clean Air Commute & Telemetry",
+  "description": "Compare commuter routes in real-time based on air-quality indicators, PM2.5 exposure, pollution hotspots, and travel time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

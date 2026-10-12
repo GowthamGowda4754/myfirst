@@ -1,0 +1,197 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Hardened Primitives
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Validation Helper: UserCommuteProfile
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+          'uid',
+          'displayName',
+          'preferredMode',
+          'tempUnit',
+          'sensitiveGroupMode',
+          'aqiAlertThreshold',
+          'commuteReminder',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'preferredMode',
+          'tempUnit',
+          'sensitiveGroupMode',
+          'aqiAlertThreshold',
+          'commuteReminder',
+          'updatedAt'
+        ])
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == request.auth.uid
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 80
+        && data.preferredMode is string
+        && data.preferredMode.size() <= 16
+        && (data.preferredMode == 'bike' || data.preferredMode == 'walk' || data.preferredMode == 'transit')
+        && data.tempUnit is string
+        && data.tempUnit.size() <= 4
+        && (data.tempUnit == 'C' || data.tempUnit == 'F')
+        && data.sensitiveGroupMode is bool
+        && data.aqiAlertThreshold is int
+        && data.aqiAlertThreshold >= 40
+        && data.aqiAlertThreshold <= 150
+        && data.commuteReminder is bool
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    // Validation Helper: SavedCommuteRoute
+    function isValidSavedRoute(data) {
+      return data.keys().hasAll([
+          'uid',
+          'name',
+          'origin',
+          'destination',
+          'travelMode',
+          'avgAqi',
+          'pm25Exposure',
+          'durationMins',
+          'distanceKm',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'name',
+          'origin',
+          'destination',
+          'travelMode',
+          'avgAqi',
+          'pm25Exposure',
+          'durationMins',
+          'distanceKm',
+          'createdAt'
+        ])
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == request.auth.uid
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 100
+        && data.origin is string
+        && data.origin.size() >= 1
+        && data.origin.size() <= 160
+        && data.destination is string
+        && data.destination.size() >= 1
+        && data.destination.size() <= 160
+        && data.travelMode is string
+        && data.travelMode.size() <= 16
+        && (data.travelMode == 'bike' || data.travelMode == 'walk' || data.travelMode == 'transit')
+        && data.avgAqi is int
+        && data.avgAqi >= 0
+        && data.avgAqi <= 500
+        && (data.pm25Exposure is int || data.pm25Exposure is float)
+        && data.pm25Exposure >= 0
+        && data.pm25Exposure <= 500
+        && data.durationMins is int
+        && data.durationMins >= 1
+        && data.durationMins <= 600
+        && (data.distanceKm is int || data.distanceKm is float)
+        && data.distanceKm >= 0
+        && data.distanceKm <= 500
+        && data.createdAt is timestamp;
+    }
+
+    // Collection: /users/{userId}
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId) && resource.data.uid == request.auth.uid;
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming());
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName',
+          'preferredMode',
+          'tempUnit',
+          'sensitiveGroupMode',
+          'aqiAlertThreshold',
+          'commuteReminder',
+          'updatedAt'
+        ]);
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Subcollection: /users/{userId}/savedRoutes/{routeId}
+      match /savedRoutes/{routeId} {
+        // Master Gate checks parent document existence for single-doc operations
+        allow get: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(routeId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        // Secure list query without get()/exists() inside list to prevent O(n) cost explosion
+        allow list: if isOwner(userId)
+          && resource.data.uid == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(routeId)
+          && isValidSavedRoute(incoming())
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(routeId)
+          && isValidSavedRoute(incoming())
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'name',
+            'origin',
+            'destination',
+            'travelMode',
+            'avgAqi',
+            'pm25Exposure',
+            'durationMins',
+            'distanceKm'
+          ])
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow delete: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(routeId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+      }
+    }
+  }
+}

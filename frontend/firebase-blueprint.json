@@ -1,0 +1,145 @@
+{
+  "entities": {
+    "UserCommuteProfile": {
+      "title": "UserCommuteProfile",
+      "description": "Stores a signed-in commuter's clean-air routing preferences, display name, and respiratory threshold settings.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the commuter owner",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Commuter display name",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "preferredMode": {
+          "type": "string",
+          "description": "Default travel mode for route planning",
+          "enum": ["bike", "walk", "transit"]
+        },
+        "tempUnit": {
+          "type": "string",
+          "description": "Temperature display unit",
+          "enum": ["C", "F"]
+        },
+        "sensitiveGroupMode": {
+          "type": "boolean",
+          "description": "Whether sensitive respiratory group guidance is enabled"
+        },
+        "aqiAlertThreshold": {
+          "type": "integer",
+          "description": "AQI threshold above which bypass alerts trigger (40 to 150)"
+        },
+        "commuteReminder": {
+          "type": "boolean",
+          "description": "Whether low-exposure departure reminders are enabled"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last profile update"
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "preferredMode",
+        "tempUnit",
+        "sensitiveGroupMode",
+        "aqiAlertThreshold",
+        "commuteReminder",
+        "updatedAt"
+      ]
+    },
+    "SavedCommuteRoute": {
+      "title": "SavedCommuteRoute",
+      "description": "A commuter's bookmarked clean-air route comparison record.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Route title",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "origin": {
+          "type": "string",
+          "description": "Origin address or station",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "destination": {
+          "type": "string",
+          "description": "Destination address or landmark",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "travelMode": {
+          "type": "string",
+          "description": "Selected travel mode",
+          "enum": ["bike", "walk", "transit"]
+        },
+        "avgAqi": {
+          "type": "integer",
+          "description": "Estimated corridor AQI (0 to 500)"
+        },
+        "pm25Exposure": {
+          "type": "number",
+          "description": "Estimated PM2.5 exposure in ug/m3"
+        },
+        "durationMins": {
+          "type": "integer",
+          "description": "Estimated duration in minutes"
+        },
+        "distanceKm": {
+          "type": "number",
+          "description": "Distance in kilometers"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when route was bookmarked"
+        }
+      },
+      "required": [
+        "uid",
+        "name",
+        "origin",
+        "destination",
+        "travelMode",
+        "avgAqi",
+        "pm25Exposure",
+        "durationMins",
+        "distanceKm",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserCommuteProfile"
+      },
+      "description": "Stores commuter preferences and clean-air alert thresholds for each authenticated user."
+    },
+    "/users/{userId}/savedRoutes/{routeId}": {
+      "schema": {
+        "$ref": "#/entities/SavedCommuteRoute"
+      },
+      "description": "Subcollection of saved clean-air commuter routes owned by the parent user."
+    }
+  }
+}
